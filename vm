@@ -1,0 +1,581 @@
+#!/bin/zsh
+export cmd=$1
+export name=$2
+function cryptcheck
+{
+if [ -f crypto/server-cert.pem ];then
+sleep .01
+else
+cryptinit $name
+fi
+}
+function cryptinit
+{
+if [ -d crypto ];then
+sleep .01
+else
+mkdir crypto
+fi
+echo generating CA for spice tls connection
+openssl req -nodes -new -x509 -days 36500 -extensions v3_ca -keyout crypto/ca-key.pem -out crypto/ca-cert.pem > /dev/null 2>/dev/null<<EOF
+US
+New-York
+Yonkers
+VM-Remote
+Security
+$name-ca
+
+EOF
+echo generating server key for spice tls connection
+openssl genrsa -out crypto/server-key.pem > /dev/null 2>/dev/null
+echo generating server certificate request for spice tls connection
+openssl req -new -key crypto/server-key.pem -out crypto/server-req.pem  > /dev/null 2>/dev/null <<EOF
+US
+New-York
+Yonkers
+VM-Remote
+Security
+$name-req
+
+
+
+EOF
+echo signing server certificate request for spice tls connection
+openssl x509 -req -days 36500 -in crypto/server-req.pem -CA crypto/ca-cert.pem -CAkey crypto/ca-key.pem -set_serial 01 -out crypto/server-cert.pem  > /dev/null 2>/dev/null <<EOF
+US
+New-York
+Yonkers
+VM-Remote
+Security
+
+
+
+
+$name
+
+EOF
+echo creating connection file for client
+cat > $name.con <<EOF
+[virt-viewer]
+type=spice
+host=$host
+tls-port=$port
+fullscreen=1
+enable-smartcard=1
+enable-usbredir=1
+enable-usb-autoshare=1
+title=$name
+secure-channels=main;display;inputs;cursor;playback;record;smartcard;usbredir
+color-depth=32
+disable-effects=all
+toggle-fullscreen=ctrl+shift+alt+f
+release-cursor=ctrl+shift+alt+g
+secure-attention=ctrl+del
+EOF
+echo -n ca\=>>$name.con
+export numlines=`cat crypto/ca-cert.pem|wc -l`
+export line=1
+while true;do
+cat crypto/ca-cert.pem|head -n $line|tail -n 1 |tr \\n \  >>$name.con
+export line=$(($line+1))
+if [ $line -gt $numlines ];then
+echo >>$name.con
+echo password\=$pass>>$name.con
+break
+else
+echo -n '\\n'>>$name.con
+continue
+fi
+done
+echo -n host-subject\=>>$name.con
+openssl x509 --noout -subject -in crypto/server-cert.pem|sed s/subject\=//g|sed s/,\ /,/g|sed s/\ \=\ /\=/g>>$name.con
+if [ -z $nowin ];then
+echo using local copy of virtviewer installer
+cp ~/.local/share/vm/vv.msi vv.msi
+cp ~/.local/share/vm/vv.msi.asc vv.msi.asc
+if gpg --verify vv.msi.asc;then
+sleep .01
+else
+echo failed to verify the local copy of the virtviewer installer! windows connection creation will be unavailable.
+export nowin=1
+fi
+echo extracting virtviewer installer
+msiextract vv.msi > /dev/null 2>/dev/null
+mv VirtViewer* $name
+cp $name.con $name/bin/connection
+echo creating windows connection script for client
+cat > $name/connect.bat <<EOF
+@echo off
+cd .\\bin
+.\\remote-viewer.exe connection
+exit
+EOF
+echo zipping connection package
+zip -r $name.zip $name >/dev/null 2>/dev/null
+else
+sleep .01
+fi
+}
+function dircheck
+{
+if [ -z $indir ];then
+if [ -d $name ];then
+sleep .01
+else
+mkdir $name
+fi
+cd $name
+export indir=1
+else
+sleep .01
+fi
+}
+function diskcheck
+{
+if [ -f $name.qcow2 ];then
+sleep .01
+else
+echo formatting virtual disk
+qemu-img create $name.qcow2 -f qcow2 $size > /dev/null 2>/dev/null
+fi
+if [ -f $name.nvram ];then
+sleep .01
+else
+echo copying default nvram
+cp /usr/share/OVMF/x64/OVMF_VARS.fd $name.nvram
+fi
+}
+function init
+{
+if [ -z $name ];then
+export name=$2
+if [ -z $name ];then
+echo enter vm name
+read name
+fi
+fi
+if [ -z $cores ];then
+export cores=$3
+if [ -z $cores ];then
+echo enter number of processor cores
+read cores
+fi
+fi
+if [ -z $mem ];then
+export mem=$4
+if [ -z $mem ];then
+echo enter ram size, in MB
+read mem
+fi
+fi
+if [ -z $size ];then
+export size=$5
+if [ -z $size ];then
+echo enter maximum hard disk size
+read size
+fi
+fi
+if [ -z $iso ];then
+export iso=$6
+if [ -z $iso ];then
+echo enter full path of installer ISO image
+read iso
+fi
+fi
+if [ -z $host ];then
+export host=$7
+if [ -z $host ];then
+echo enter hostname that clients will use to connect, leav blank for localhost
+read host
+if [ -z $host ];then
+export host=localhost
+fi
+fi
+fi
+if [ -z $port ];then
+export port=$8
+if [ -z $port ];then
+echo enter the port number on which the connection should be accepted
+read port
+fi
+fi
+if [ -z $pass ];then
+export pass=$9
+if [ -z $pass ];then
+echo enter the remote connection password. This password will be written in plaintext to the connection files that are distributed to clients. If left blank, the name of the vm will be used
+read pass
+fi
+if [ -z $pass ];then
+export pass=$name
+fi
+fi
+dircheck
+diskcheck
+cryptcheck
+varcheck
+}
+function shutdown
+{
+dircheck
+if [ -f $name.pid ];then
+echo forcefully shutting down $name
+kill `cat $name.pid`
+rm $name.pid
+if [ -f $name.ws.pid ];then
+echo shutting down spice web socket proxy for $name
+kill -9 `cat $name.ws.pid`
+rm $name.ws.pid
+fi
+else
+echo $name is not running
+exit 1
+fi
+}
+function start
+{
+dircheck
+echo starting up $name
+$PWD/$name.vars
+}
+function varcheck
+{
+dircheck
+if [ -f $name.vars ];then
+sleep .01
+else
+export uuid=`uuidgen`
+echo generating vm startup script
+cat > $name.vars<<EOF
+#!/bin/zsh
+export name=$name
+export cores=$cores
+export mem=$mem
+export host=$host
+export port=$port
+export iso=$iso
+export pass=$pass
+export uuid=$uuid
+EOF
+if [ -z $noweb ];then
+sleep .01
+else
+echo export noweb=1 >> $name.vars
+fi
+if [ -z $nostartupsnap ];then
+sleep .01
+else
+echo export nostartupsnap=1 >> $name.vars
+fi
+if [ -z $noshutdownsnap ];then
+sleep .01
+else
+echo export noshutdownsnap=1 >> $name.vars
+fi
+cat >> $name.vars<<EOF
+if [ -d crypto ];then
+sleep .01
+else
+mkdir crypto
+fi
+openssl rand -base64 32 > crypto/key.b64
+export key=\$(base64 -d crypto/key.b64 | hexdump  -v -e '/1 "%02X"')
+openssl rand -base64 16 > crypto/iv.b64
+export iv=\$(base64 -d crypto/iv.b64 | hexdump  -v -e '/1 "%02X"')
+export secret=\$(printf \$pass |openssl enc -aes-256-cbc -a -K \$key -iv \$iv)
+if [ -e \$name.fwd ];then
+export len=\`cat \$name.fwd|wc -l\`
+export counter=1
+for p in \`cat \$name.fwd\`;do
+export o=\`echo -n \$p|cut -f 2 -d :\`
+export r=\`echo -n \$p|cut -f 1 -d :\`
+if [ \$counter -lt \$len ];then
+export fwdstr=\$fwdstr\$r::\$((\$port+\$o))-:\$o,hostfwd=
+else
+export fwdstr=\$fwdstr\$r::\$((\$port+\$o))-:\$o
+fi
+export counter=\$((\$counter+1))
+done
+fi
+if [ -z \$fwdstr ];then
+export netstr="-nic user,model=virtio"
+else
+export netstr="-nic user,model=virtio,hostfwd=\$fwdstr"
+fi
+if [ -z \$noweb ];then
+if which websockify > /dev/null 2>/dev/null;then
+websockify -D \$((\$port+5900)) :\$port --ssl-target
+export wspid=\`pgrep -af websockify|grep -w :\$port|cut -f 1 -d \  |tail -n 1\`
+echo \$wspid > \$name.ws.pid
+else
+echo websockify not found, web-based spice connections will be unavailable
+fi
+else
+sleep .01
+fi
+if [ -z \$nostartupsnap ];then
+qemu-img snapshot \$name.qcow2 -c startup-\`date +%Y-%m-%d\|%H:%M:%S\`
+else
+sleep .01
+fi
+if [ -d tpm ];then
+sleep .01
+else
+mkdir tpm
+fi
+swtpm socket --tpmstate dir=tpm --ctrl type=unixio,path=tpm/swtpm-sock --log level=0 --tpm2 &
+echo \$! > tpm/pid
+export tpmpid=\`cat tpm/pid\`
+qemu-system-x86_64 \\
+-audiodev driver=spice,id=audio \\
+\`echo -n \$netstr \` \\
+-display egl-headless \\
+-chardev spicevmc,id=vdagent,name=vdagent \\
+-chardev spiceport,id=foldershare,name=org.spice-space.webdav.0 \\
+-chardev spiceport,id=vstream,name=org.spice-space.stream.0 \\
+-chardev spicevmc,id=usbredir1,name=usbredir \\
+-chardev spicevmc,id=usbredir2,name=usbredir \\
+-chardev spicevmc,id=usbredir3,name=usbredir \\
+-chardev spicevmc,id=usbredir4,name=usbredir \\
+-chardev spicevmc,id=usbredir5,name=usbredir \\
+-chardev spicevmc,id=usbredir6,name=usbredir \\
+-chardev spicevmc,id=smartcard,name=smartcard \\
+-chardev socket,id=monitors,path=\$name.monitor,server=on,wait=off,telnet=on \\
+-chardev socket,id=monitorc,path=\$name.monitor,reconnect=1,telnet=on \\
+-chardev socket,id=chrtpm,path=tpm/swtpm-sock \\
+-tpmdev emulator,id=tpm0,chardev=chrtpm \\
+-cpu max,-hypervisor \\
+-smp cores=\$cores \\
+-device qemu-xhci,id=usb \\
+-device usb-ccid \\
+-device ccid-card-passthru,chardev=smartcard \\
+-device virtio-balloon \\
+-device virtio-blk,drive=internal \\
+-device virtio-rng \\
+-device qxl-vga,ram_size=\$((\$mem/4*\$((\$mem/4)))),vram_size=\$((\$mem/4*\$((\$mem/4)))) \\
+-device virtio-serial \\
+-device virtserialport,chardev=vdagent,name=com.redhat.spice.0 \\
+-device virtserialport,chardev=foldershare,name=org.spice-space.webdav.0 \\
+-device virtserialport,chardev=vstream,name=org.spice-space.stream.0 \\
+-device virtserialport,chardev=monitorc,name=monitor \\
+-device usb-redir,chardev=usbredir1 \\
+-device usb-redir,chardev=usbredir2 \\
+-device usb-redir,chardev=usbredir3 \\
+-device usb-redir,chardev=usbredir4 \\
+-device usb-redir,chardev=usbredir5 \\
+-device usb-redir,chardev=usbredir6 \\
+-device ide-cd,drive=installer \\
+-device usb-storage,drive=virtio \\
+-device ich9-intel-hda \\
+-device hda-duplex,audiodev=audio \\
+-device tpm-tis,tpmdev=tpm0 \\
+-drive file=/usr/share/OVMF/x64/OVMF_CODE.secboot.fd,format=raw,id=secureboot,if=pflash,readonly=on \\
+-drive file=\$name.nvram,format=raw,id=nvram,if=pflash \\
+-drive discard=unmap,file=\$name.qcow2,format=qcow2,id=internal,if=none \\
+-drive file=\$iso,format=raw,id=installer,if=none,readonly=on \\
+-drive file=virtio-usb.img,format=raw,id=virtio,if=none,media=disk \\
+--enable-kvm \\
+-global driver=cfi.pflash01,property=secure,value=on \\
+-global ICH9-LPC.disable_s3=1 \\
+-machine q35,smm=on,pcspk-audiodev=audio \\
+-m \$mem \\
+-name \$name \\
+-object secret,id=secmaster0,format=base64,file=crypto/key.b64 \\
+-object secret,id=sec0,keyid=secmaster0,format=base64,data=\$secret,iv=\$(<crypto/iv.b64) \\
+-uuid \$uuid \\
+-sandbox on,obsolete=deny,elevateprivileges=deny,resourcecontrol=deny \\
+-spice tls-port=\$port,x509-dir=crypto,streaming-video=all,password-secret=sec0 \\
+-monitor chardev:monitors&
+echo \$! > \$name.pid
+if [ -z \$noshutdownsnap ];then
+while true;do
+if [ -f \$name.pid ];then
+continue
+else
+sleep .5
+kill -9 \$tpmpid
+rm tpm/pid
+qemu-img snapshot \$name.qcow2 -c shutdown-\`date +%Y-%m-%d\|%H:%M:%S\`
+exit 0
+fi
+done&
+else
+sleep .01
+fi
+EOF
+chmod 755 $name.vars
+cp $name.vars $name.local
+sed -i "/tpm-tis/d;/qxl/d;/usb-redir/d;/usbredir/d;/virtserialport/d;/virtio-serial/d;/usb-ccid/d;/ccid-card/d;/virtio-balloon/d;/virtio-rng/d;/acpitable/d;/chardev spice/d;/monitor/d;/smbios/d;/-pidfile/d;/-daemonize/d;/-object/d;/-spice/d;s|-audiodev driver=spice,id=audio \\\|-audiodev driver=pa,id=audio \\\|g;s|-sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \\\|-sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \\\\\n--nographic|g;s|hda-duplex,audiodev=audio|virtio-blk,drive=unattend|g;s|-global driver=cfi.pflash01,property=secure,value=on|-drive file=unattend.img,format=raw,id=unattend,if=none|g" $name.local
+sed -i "s|virtio-blk,drive=unattend|hda-duplex,audiodev=audio|g;/unattend/d;/iso=/d;/ide-cd/d;/installer/d;s|ide-hd|virtio-blk|g;s|-nographic|-display gtk,gl=on\&|g" $name.local
+sed -i "s|-display egl-headless|-display gtk --full-screen|g" $name.local
+sed -i "s|-display egl-headless|-device qxl-vga,ram_size=\$((\$mem/4*\$((\$mem/4)))),vram_size=\$((\$mem/4*\$((\$mem/4)))) --full-screen|g" $name.local
+sed -i "s|resourcecontrol=deny \\\|resourcecontrol=deny|g" $name.local
+if [ -z $nowin ];then
+sleep .01
+else
+sed -i "/virtio-usb/d;/usb-storage/d" $name.local
+fi
+if [ -e ~/.local/share/vm ];then
+sleep .01
+else
+mkdir -p ~/.local/share/vm
+fi
+fi
+if [ -e virtio-usb.img ];then
+sleep .01
+else
+if [ -z $nowin ];then
+echo copying windows virtio emulated usb to $name directory
+cp ~/.local/share/vm/virtio-usb.img .
+else
+sed -i "/usb-storage,drive=virtio/d;/virtio-usb/d" $name.vars
+fi
+fi
+}
+if [ -e ~/.local/share/vm ];then
+sleep .01
+else
+mkdir -p ~/.local/share/vm
+fi
+if [ -z $nowin ];then
+if [ -e ~/.local/share/vm/virtio-usb.img ];then
+sleep .01
+else
+echo creating emulated usb for windows virtio drivers
+export mydir=`pwd`
+export tmpdir=`mktemp -d`
+cd $tmpdir
+7z x /var/lib/libvirt/images/virtio-win.iso
+export tgtsize=`du -b .|tail -n 1|cut -f 1`
+cd $mydir
+export imgsize=$(($tgtsize+10240*1024))
+truncate -s $imgsize ~/.local/share/vm/virtio-usb.img
+sgdisk -o -n 1:0:-0s:0700 -t 1:0700 ~/.local/share/vm/virtio-usb.img
+mkfs.vfat -n VIRTIO --offset=2048 ~/.local/share/vm/virtio-usb.img
+export loopdev=`udisksctl loop-setup -f ~/.local/share/vm/virtio-usb.img|cut -f 5 -d \  |cut -f 1 -d .`
+export mount=`udisksctl mount -b $loopdev"p1"|cut -f 4 -d \  `
+rsync -avz $tmpdir"/" $mount"/"
+umount $mount
+udisksctl loop-delete -b $loopdev
+rm -rf $tmpdir
+cd $mydir
+fi
+if [ -e ~/.local/share/vm/vv.msi ];then
+sleep .01
+else
+export keyid=`lynx --dump https://virt-manager.org/download|grep -i gpg|grep -i recv-key|sed "s|$ gpg --recv-key ||g"`
+export url=`lynx --dump -listonly -nonumbers https://virt-manager.org/download|grep x64|grep msi|head -n 1`
+export sigurl=`echo $url".asc"`
+while true;do
+echo downloading virtviewer installer to create connection packages
+if curl -Lo vv.msi $url;then
+break
+else
+continue
+fi
+done
+while true;do
+echo downloading signature
+if curl -Lo vv.msi.asc $sigurl;then
+break
+else
+continue
+fi
+done
+while true;do
+echo receiving key
+if gpg --recv-key $keyid;then
+break
+else
+continue
+fi
+done
+while true;do
+echo verifying signature of VirtViewer installer
+if gpg --verify vv.msi.asc;then
+break
+else
+continue
+fi
+done
+echo saving local virtviewer installer
+mv vv.msi ~/.local/share/vm
+mv vv.msi.asc ~/.local/share/vm
+chmod 600 ~/.local/share/vm/vv.msi
+chmod 600 ~/.local/share/vm/vv.msi.asc
+fi
+fi
+if [ -e /usr/share/OVMF/x64/OVMF_CODE.secboot.fd ];then
+sleep .01
+else
+echo please install the ovmf package which contains uefi firmware for your virtual machine. If this package is already installed, the secure boot firmware should be located at /usr/share/OVMF/x64/OVMF_CODE.secboot.fd
+export noreq=1
+fi
+if which swtpm > /dev/null 2>/dev/null;then
+sleep .01
+else
+echo please install the swtpm package which contains a TPM emulator for your virtual machine. If this package is already installed, please make sure that the swtpm command is somewhere in your PATH.
+export noreq=1
+fi
+if [ -z $nowin ];then
+sleep .01
+else
+if [ -e /var/lib/libvirt/images/virtio-win.iso ];then
+sleep .01
+else
+echo please install the virtio-win package which contains windows guest drivers. If this package is already installed, the iso file should be located at /var/lib/libvirt/images/virtio-win.iso
+export noreq=1
+fi
+if which msiextract > /dev/null 2>/dev/null;then
+sleep .01
+else
+echo please install the msitools package to create standalone connection data. If this package is already installed, the msiextract command should be located in your path.
+export noreq=1
+fi
+if which rsync > /dev/null 2>/dev/null;then
+sleep .01
+else
+echo please install the rsync package to copy windows virtio drivers to an emulated usb device. If this package is already installed, the rsync command should be located in your path.
+export noreq=1
+fi
+if which 7z > /dev/null 2>/dev/null;then
+sleep .01
+else
+echo please install the p7zip package to extract windows virtio drivers. If this package is already installed, the 7z command should be located in your path.
+export noreq=1
+fi
+if which udisksctl > /dev/null 2>/dev/null;then
+sleep .01
+else
+echo please install the udisks2 package to mount partitions of an image without requiring root, which is used during the creation of an emulated usb device containing windows usb drivers. If this package is already installed, the udisksctl command should be located in your path.
+export noreq=1
+fi
+fi
+if [ -z $noreq ];then
+sleep .01
+else
+echo some requirements for this script are not present. Please check the above output for the missing requirements, satisfy those requirements, and retry your command.
+exit 1
+fi
+case "$cmd" in
+cryptcheck)
+cryptcheck $@
+;;
+dircheck)
+dircheck $@
+;;
+diskcheck)
+diskcheck $@
+;;
+init)
+init $@
+;;
+shutdown)
+shutdown $@
+;;
+start)
+start $@
+;;
+varcheck)
+varcheck$@
+;;
+esac
