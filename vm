@@ -389,10 +389,13 @@ echo \$! > \$name.pid
 if [ -z \$noshutdownsnap ];then
 while true;do
 if [ -f \$name.pid ];then
+if ps \`cat \$name.pid|head -n 1|cut -f 1 -d \  \`|grep -qw qemu-system-x86_64;then
 continue
 else
+rm \$name.pid
+fi
+else
 sleep .5
-kill -9 \$tpmpid
 rm tpm/pid
 qemu-img snapshot \$name.qcow2 -c shutdown-\`date +%Y-%m-%d\|%H:%M:%S\`
 exit 0
