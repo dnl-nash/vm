@@ -245,6 +245,18 @@ sleep .01
 else
 export uuid=`uuidgen`
 echo generating vm startup script
+if [ -z $noisodetect ];then
+unset installertype
+else
+export installertype="-device ide-cd,drive=installer"
+fi
+if [ -z $installertype ];then
+if file $iso|sed "s|$iso:||g"|grep -qw ISO;then
+export installertype="-device ide-cd,drive=installer"
+else
+export installertype="-device usb-storage,drive=installer"
+fi
+fi
 cat > $name.vars<<EOF
 #!/bin/zsh
 export name=$name
@@ -351,7 +363,7 @@ qemu-system-x86_64 \\
 -device virtio-balloon \\
 -device virtio-blk,drive=internal \\
 -device virtio-rng \\
--device qxl-vga,ram_size=\$((\$mem/4*\$((\$mem/4)))),vram_size=\$((\$mem/4*\$((\$mem/4)))) \\
+-device virtio-vga-gl,max_hostmem=\$((\$mem/4*\$((\$mem/4)))) \\
 -device virtio-serial \\
 -device virtserialport,chardev=vdagent,name=com.redhat.spice.0 \\
 -device virtserialport,chardev=foldershare,name=org.spice-space.webdav.0 \\
@@ -363,7 +375,7 @@ qemu-system-x86_64 \\
 -device usb-redir,chardev=usbredir4 \\
 -device usb-redir,chardev=usbredir5 \\
 -device usb-redir,chardev=usbredir6 \\
--device ide-cd,drive=installer \\
+$installertype \\
 -device usb-storage,drive=virtio \\
 -device ich9-intel-hda \\
 -device hda-duplex,audiodev=audio \\

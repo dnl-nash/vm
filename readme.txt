@@ -19,6 +19,8 @@ nostartupsnap:
 disables creation of a snapshot every time the vm starts up, allowing the restore of the disk to any given startup, also makes a primitive audit traill
 noshutdownsnap:
 same as nostartupsnap, but for shutdowns
+noisodetect:
+Skips the heuristic installer image type detection, forces installer type to ide-cd rather than autodetecting cd or usb
 
 Script requirements:
 
