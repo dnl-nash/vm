@@ -424,7 +424,7 @@ chmod 755 $name.vars
 cp $name.vars $name.local
 sed -i "/tpm-tis/d;/qxl/d;/usb-redir/d;/usbredir/d;/virtserialport/d;/virtio-serial/d;/usb-ccid/d;/ccid-card/d;/virtio-balloon/d;/virtio-rng/d;/acpitable/d;/chardev spice/d;/monitor/d;/smbios/d;/-pidfile/d;/-daemonize/d;/-object/d;/-spice/d;s|-audiodev driver=spice,id=audio \\\|-audiodev driver=pa,id=audio \\\|g;s|-sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \\\|-sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \\\\\n--nographic|g;s|hda-duplex,audiodev=audio|virtio-blk,drive=unattend|g;s|-global driver=cfi.pflash01,property=secure,value=on|-drive file=unattend.img,format=raw,id=unattend,if=none|g" $name.local
 sed -i "s|virtio-blk,drive=unattend|hda-duplex,audiodev=audio|g;/unattend/d;/iso=/d;/ide-cd/d;/installer/d;s|ide-hd|virtio-blk|g;s|-nographic|-display gtk,gl=on\&|g" $name.local
-sed -i "s|-display egl-headless|-display gtk --full-screen|g" $name.local
+sed -i "s|-display egl-headless|-display gtk,gl=on --full-screen|g" $name.local
 sed -i "s|-display egl-headless|-device qxl-vga,ram_size=\$((\$mem/4*\$((\$mem/4)))),vram_size=\$((\$mem/4*\$((\$mem/4)))) --full-screen|g" $name.local
 sed -i "s|resourcecontrol=deny \\\|resourcecontrol=deny|g" $name.local
 if [ -z $nowin ];then
