@@ -299,14 +299,18 @@ export iv=\$(base64 -d crypto/iv.b64 | hexdump  -v -e '/1 "%02X"')
 export secret=\$(printf \$pass |openssl enc -aes-256-cbc -a -K \$key -iv \$iv)
 if [ -e \$name.fwd ];then
 export len=\`cat \$name.fwd|wc -l\`
-export counter=1
+export counter=0
 for p in \`cat \$name.fwd\`;do
+if echo \$p|grep -q -;then
+export fwdstr=\$fwdstr=\$p
+else
 export o=\`echo -n \$p|cut -f 2 -d :\`
 export r=\`echo -n \$p|cut -f 1 -d :\`
-if [ \$counter -lt \$len ];then
-export fwdstr=\$fwdstr\$r::\$((\$port+\$o))-:\$o,hostfwd=
+if [ \$counter -le \$len ];then
+export fwdstr=\$fwdstr,hostfwd=\$r::\$((\$port+\$o))-10.0.2.15:\$o,hostfwd
 else
-export fwdstr=\$fwdstr\$r::\$((\$port+\$o))-:\$o
+export fwdstr=\$fwdstr\$r::\$((\$port+\$o))-10.0.2.15:\$o
+fi
 fi
 export counter=\$((\$counter+1))
 done
@@ -314,7 +318,7 @@ fi
 if [ -z \$fwdstr ];then
 export netstr="-nic user,model=virtio"
 else
-export netstr="-nic user,model=virtio,hostfwd=\$fwdstr"
+export netstr="-nic user,model=virtio\$fwdstr"
 fi
 if [ -z \$noweb ];then
 if which websockify > /dev/null 2>/dev/null;then
