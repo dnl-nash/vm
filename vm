@@ -237,6 +237,12 @@ dircheck
 echo starting up $name
 $PWD/$name.vars
 }
+function localstart
+{
+dircheck
+echo starting up $name
+$PWD/$name.local
+}
 function varcheck
 {
 dircheck
@@ -297,17 +303,20 @@ export key=\$(base64 -d crypto/key.b64 | hexdump  -v -e '/1 "%02X"')
 openssl rand -base64 16 > crypto/iv.b64
 export iv=\$(base64 -d crypto/iv.b64 | hexdump  -v -e '/1 "%02X"')
 export secret=\$(printf \$pass |openssl enc -aes-256-cbc -a -K \$key -iv \$iv)
-if [ -e \$name.fwd ];then
+if \[ -e \$name.fwd \];then
 export len=\`cat \$name.fwd|wc -l\`
-export counter=0
+export counter=1
+if \[ \$counter -eq 1 \];then
+export fwdstr=\$fwdstr",hostfwd="
+fi
 for p in \`cat \$name.fwd\`;do
 if echo \$p|grep -q -;then
-export fwdstr=\$fwdstr=\$p
+export fwdstr=\$fwdstr\$p
 else
 export o=\`echo -n \$p|cut -f 2 -d :\`
 export r=\`echo -n \$p|cut -f 1 -d :\`
-if [ \$counter -le \$len ];then
-export fwdstr=\$fwdstr,hostfwd=\$r::\$((\$port+\$o))-10.0.2.15:\$o,hostfwd
+if \[ \$counter -le \$len \];then
+export fwdstr=\$fwdstr,hostfwd=\$r::\$((\$port+\$o))-10.0.2.15:\$o
 else
 export fwdstr=\$fwdstr\$r::\$((\$port+\$o))-10.0.2.15:\$o
 fi
@@ -596,6 +605,9 @@ shutdown $@
 ;;
 start)
 start $@
+;;
+localstart)
+localstart $@
 ;;
 varcheck)
 varcheck$@
