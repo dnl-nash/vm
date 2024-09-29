@@ -142,7 +142,13 @@ if [ -f $name.nvram ];then
 sleep .01
 else
 echo copying default nvram
-cp /usr/share/OVMF/x64/OVMF_VARS.fd $name.nvram
+cp ~/.local/share/vm/default.nvram $name.nvram
+fi
+if [ -f $name.rom ];then
+sleep .01
+else
+echo copying default firmware
+cp ~/.local/share/vm/default.rom $name.rom
 fi
 }
 function init
@@ -396,7 +402,7 @@ $installertype \\
 -device ich9-intel-hda \\
 -device hda-duplex,audiodev=audio \\
 -device tpm-tis,tpmdev=tpm0 \\
--drive file=/usr/share/OVMF/x64/OVMF_CODE.secboot.fd,format=raw,id=secureboot,if=pflash,readonly=on \\
+-drive file=\$name.rom,format=raw,id=secureboot,if=pflash,readonly=on \\
 -drive file=\$name.nvram,format=raw,id=nvram,if=pflash \\
 -drive discard=unmap,file=\$name.qcow2,format=qcow2,id=internal,if=none \\
 $installerobj \\
@@ -535,11 +541,25 @@ chmod 600 ~/.local/share/vm/vv.msi
 chmod 600 ~/.local/share/vm/vv.msi.asc
 fi
 fi
-if [ -e /usr/share/OVMF/x64/OVMF_CODE.secboot.fd ];then
+if [ -e ~/.local/share/vm/default.nvram ];then
 sleep .01
+else
+if [ -e /usr/share/OVMF/x64/OVMF_VARS.fd ];then
+cp /usr/share/OVMF/x64/OVMF_VARS.fd ~/.local/share/vm/default.nvram
 else
 echo please install the ovmf package which contains uefi firmware for your virtual machine. If this package is already installed, the secure boot firmware should be located at /usr/share/OVMF/x64/OVMF_CODE.secboot.fd
 export noreq=1
+fi
+fi
+if [ -e ~/.local/share/vm/default.rom ];then
+sleep .01
+else
+if [ -e /usr/share/OVMF/x64/OVMF_CODE.secboot.fd ];then
+cp /usr/share/OVMF/x64/OVMF_CODE.secboot.fd  ~/.local/share/vm/default.rom
+else
+echo please install the ovmf package which contains uefi firmware for your virtual machine. If this package is already installed, the secure boot firmware should be located at /usr/share/OVMF/x64/OVMF_CODE.secboot.fd
+export noreq=1
+fi
 fi
 if which swtpm > /dev/null 2>/dev/null;then
 sleep .01
