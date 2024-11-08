@@ -544,20 +544,20 @@ fi
 if [ -e ~/.local/share/vm/default.nvram ];then
 sleep .01
 else
-if [ -e /usr/share/OVMF/x64/OVMF_VARS.fd ];then
-cp /usr/share/OVMF/x64/OVMF_VARS.fd ~/.local/share/vm/default.nvram
+if [ -e /usr/share/OVMF/x64/OVMF_VARS.4m.fd ];then
+cp /usr/share/OVMF/x64/OVMF_VARS.4m.fd ~/.local/share/vm/default.nvram
 else
-echo please install the ovmf package which contains uefi firmware for your virtual machine. If this package is already installed, the secure boot firmware should be located at /usr/share/OVMF/x64/OVMF_CODE.secboot.fd
+echo please install the ovmf package which contains uefi firmware for your virtual machine. If this package is already installed, the secure boot firmware should be located at /usr/share/OVMF/x64/OVMF_CODE.secboot.4m.fd
 export noreq=1
 fi
 fi
 if [ -e ~/.local/share/vm/default.rom ];then
 sleep .01
 else
-if [ -e /usr/share/OVMF/x64/OVMF_CODE.secboot.fd ];then
-cp /usr/share/OVMF/x64/OVMF_CODE.secboot.fd  ~/.local/share/vm/default.rom
+if [ -e /usr/share/OVMF/x64/OVMF_CODE.secboot.4m.fd ];then
+cp /usr/share/OVMF/x64/OVMF_CODE.secboot.4m.fd  ~/.local/share/vm/default.rom
 else
-echo please install the ovmf package which contains uefi firmware for your virtual machine. If this package is already installed, the secure boot firmware should be located at /usr/share/OVMF/x64/OVMF_CODE.secboot.fd
+echo please install the ovmf package which contains uefi firmware for your virtual machine. If this package is already installed, the secure boot firmware should be located at /usr/share/OVMF/x64/OVMF_CODE.secboot.4m.fd
 export noreq=1
 fi
 fi
