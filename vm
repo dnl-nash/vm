@@ -374,7 +374,7 @@ qemu-system-x86_64 \\
 -chardev spicevmc,id=usbredir6,name=usbredir \\
 -chardev spicevmc,id=smartcard,name=smartcard \\
 -chardev socket,id=monitors,path=\$name.monitor,server=on,wait=off,telnet=on \\
--chardev socket,id=monitorc,path=\$name.monitor,reconnect=1,telnet=on \\
+-chardev socket,id=monitorc,path=\$name.monitor,reconnect-ms=1,telnet=on \\
 -chardev socket,id=chrtpm,path=tpm/swtpm-sock \\
 -tpmdev emulator,id=tpm0,chardev=chrtpm \\
 -cpu max,-hypervisor \\
