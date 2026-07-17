@@ -265,10 +265,10 @@ export installerobj="-drive file=\$iso,format=raw,id=installer,if=none,readonly=
 fi
 if [ -z $installertype ];then
 if file $iso|sed "s|$iso:||g"|grep -qw ISO;then
-export installertype="-device ide-cd,drive=installer"
+export installertype="-device ide-cd,drive=installer,bootindex=1"
 export installerobj="-drive file=\$iso,format=raw,id=installer,if=none,readonly=on"
 else
-export installertype="-device usb-storage,drive=installer"
+export installertype="-device usb-storage,drive=installer,bootindex=1"
 export installerobj="-drive file=\$iso,format=raw,id=installer,if=none"
 fi
 fi
@@ -383,7 +383,7 @@ qemu-system-x86_64 \\
 -device usb-ccid \\
 -device ccid-card-passthru,chardev=smartcard \\
 -device virtio-balloon \\
--device virtio-blk,drive=internal \\
+-device virtio-blk,drive=internal,bootindex=0 \\
 -device virtio-rng \\
 -device virtio-vga-gl,max_hostmem=\$((\$mem/4*\$((\$mem/4)))) \\
 -device virtio-serial \\
@@ -441,8 +441,8 @@ fi
 EOF
 chmod 755 $name.vars
 cp $name.vars $name.local
-sed -i "/tpm-tis/d;/qxl/d;/usb-redir/d;/usbredir/d;/virtserialport/d;/virtio-serial/d;/usb-ccid/d;/ccid-card/d;/virtio-balloon/d;/virtio-rng/d;/acpitable/d;/chardev spice/d;/monitor/d;/smbios/d;/-pidfile/d;/-daemonize/d;/-object/d;/-spice/d;s|-audiodev driver=spice,id=audio \\\|-audiodev driver=pa,id=audio \\\|g;s|-sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \\\|-sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \\\\\n--nographic|g;s|hda-duplex,audiodev=audio|virtio-blk,drive=unattend|g;s|-global driver=cfi.pflash01,property=secure,value=on|-drive file=unattend.img,format=raw,id=unattend,if=none|g" $name.local
-sed -i "s|virtio-blk,drive=unattend|hda-duplex,audiodev=audio|g;/unattend/d;/iso=/d;/ide-cd/d;/installer/d;s|ide-hd|virtio-blk|g;s|-nographic|-display gtk,gl=on\&|g" $name.local
+sed -i "/tpm-tis/d;/qxl/d;/usb-redir/d;/usbredir/d;/virtserialport/d;/virtio-serial/d;/usb-ccid/d;/ccid-card/d;/acpitable/d;/chardev spice/d;/monitor/d;/smbios/d;/-pidfile/d;/-daemonize/d;/-object/d;/-spice/d;s|-audiodev driver=spice,id=audio \\\|-audiodev driver=pa,id=audio \\\|g;s|-sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \\\|-sandbox on,obsolete=deny,elevateprivileges=deny,spawn=deny,resourcecontrol=deny \\\\\n--nographic|g;s|hda-duplex,audiodev=audio|virtio-blk,drive=unattend|g;s|-global driver=cfi.pflash01,property=secure,value=on|-drive file=unattend.img,format=raw,id=unattend,if=none|g" $name.local
+sed -i "s|virtio-blk,drive=unattend|hda-duplex,audiodev=audio|g;/unattend/d;s|ide-hd|virtio-blk|g;s|-nographic|-display gtk,gl=on\&|g" $name.local
 sed -i "s|-display egl-headless|-display gtk,gl=on --full-screen|g" $name.local
 sed -i "s|-display egl-headless|-device qxl-vga,ram_size=\$((\$mem/4*\$((\$mem/4)))),vram_size=\$((\$mem/4*\$((\$mem/4)))) --full-screen|g" $name.local
 sed -i "s|resourcecontrol=deny \\\|resourcecontrol=deny|g" $name.local
